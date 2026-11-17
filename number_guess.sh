@@ -6,14 +6,15 @@ echo "Enter your username:"
 read USERNAME
 
 ESCAPED_USERNAME=${USERNAME//\'/\'\'}
+
 USER_ID=$($PSQL "SELECT user_id FROM users WHERE username = '$ESCAPED_USERNAME'")
 
-if [ -z "$USER_ID" ]; then
+if [[ -z "$USER_ID" ]]; then
+  echo "Welcome, $USERNAME! It looks like this is your first time here."
   $PSQL "INSERT INTO users(username) VALUES('$ESCAPED_USERNAME')" > /dev/null
   USER_ID=$($PSQL "SELECT user_id FROM users WHERE username = '$ESCAPED_USERNAME'")
-  echo "Welcome, $USERNAME! It looks like this is your first time here."
 else
-  STATS=$($PSQL "SELECT COUNT(*), MIN(guesses) FROM games WHERE user_id = $USER_ID")
+  STATS=$($PSQL "SELECT COUNT(*), COALESCE(MIN(guesses), 0) FROM games WHERE user_id = $USER_ID")
   IFS='|' read -r GAMES_PLAYED BEST_GAME <<< "$STATS"
   echo "Welcome back, $USERNAME! You have played $GAMES_PLAYED games, and your best game took $BEST_GAME guesses."
 fi
@@ -25,7 +26,10 @@ echo "Guess the secret number between 1 and 1000:"
 
 while true
 do
-  read GUESS
+  if ! read GUESS; then
+    exit 0
+  fi
+
   NUMBER_OF_GUESSES=$((NUMBER_OF_GUESSES + 1))
 
   if [[ ! "$GUESS" =~ ^-?[0-9]+$ ]]; then
@@ -33,11 +37,11 @@ do
     continue
   fi
 
-  GUESS_NUMBER=$(echo "$GUESS" | sed -E 's/^(-?)0*([0-9])$/\1\2/')
+  GUESS_NUMBER=$(printf '%s' "$GUESS" | sed -E 's/^(-?)0*([0-9])$/\1\2/')
 
   if [[ "$GUESS_NUMBER" == -* ]]; then
     echo "It's higher than that, guess again:"
-  elif [ ${#GUESS_NUMBER} -gt 4 ]; then
+  elif [[ ${#GUESS_NUMBER} -gt 4 ]]; then
     echo "It's lower than that, guess again:"
   elif (( 10#$GUESS_NUMBER > SECRET_NUMBER )); then
     echo "It's lower than that, guess again:"
